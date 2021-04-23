@@ -30,7 +30,7 @@ import com.google.cloud.firestore.v1.FirestoreSettings;
 import com.google.exposurenotification.privateanalytics.ingestion.model.DataShare;
 import com.google.exposurenotification.privateanalytics.ingestion.model.DataShare.DataShareMetadata;
 import com.google.exposurenotification.privateanalytics.ingestion.model.DataShare.EncryptedShare;
-import com.google.exposurenotification.privateanalytics.ingestion.pipeline.FirestoreConnector.FirestoreReader;
+import com.google.exposurenotification.privateanalytics.ingestion.pipeline.FirestoreConnector.FirestorePartitionQueryCreation;
 import com.google.firestore.v1.ArrayValue;
 import com.google.firestore.v1.CreateDocumentRequest;
 import com.google.firestore.v1.Document;
@@ -120,7 +120,7 @@ public class IngestionPipelineIT {
   @After
   public void tearDown() {
     cleanUpDb();
-    FirestoreConnector.shutdownFirestoreClient(client);
+    FirestoreClientTestUtils.shutdownFirestoreClient(client);
   }
 
   @Test
@@ -352,7 +352,11 @@ public class IngestionPipelineIT {
     seedDatabaseAndReturnEntryVal(numDocs);
 
     PCollection<Long> numShares =
-        testPipeline.apply(new FirestoreReader(CREATION_TIME)).apply(Count.globally());
+        testPipeline
+            .apply(new FirestorePartitionQueryCreation(CREATION_TIME))
+            .apply(FirestoreIO.v1().read().partitionQuery().build())
+            .apply(FirestoreIO.v1().read().runQuery().build())
+            .apply(Count.globally());
 
     PAssert.that(numShares).containsInAnyOrder((long) numDocs);
     PipelineResult result = testPipeline.run();
